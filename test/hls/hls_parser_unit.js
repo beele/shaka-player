@@ -6351,4 +6351,45 @@ describe('HlsParser', () => {
     const video1 = manifest.variants[0] && manifest.variants[0].video;
     expect(video1.codecs).toBe('av01.0.04M.10.0.111.09.16.09.0');
   });
+
+  it('parses manifest with audio groups and variants', async () => {
+    const masterPlaylist = [
+      '#EXTM3U',
+      '#EXT-X-VERSION:4',
+      '#EXT-X-INDEPENDENT-SEGMENTS',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-aacl-128",NAME="audio"',
+      'DEFAULT=YES,AUTOSELECT=YES',
+      '#EXT-X-STREAM-INF:PROGRAM-ID=0,BANDWIDTH=150000',
+      'AVERAGE-BANDWIDTH=136000,CODECS="mp4a.40.2",AUDIO="audio-aacl-128"',
+      'https://example.com/0.m3u8',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-aach-64",NAME="audio",',
+      'DEFAULT=YES,AUTOSELECT=YES',
+      '#EXT-X-STREAM-INF:PROGRAM-ID=0,BANDWIDTH=75000,',
+      'AVERAGE-BANDWIDTH=68000,CODECS="mp4a.40.5",AUDIO="audio-aach-64"',
+      'https://example.com/1.m3u8',
+    ].join('\n');
+
+    const manifestData = shaka.util.StringUtils.toUTF8(masterPlaylist);
+    const manifestUri = 'https://example.com/master.m3u8';
+    fakeNetEngine.setResponseValue(manifestUri, manifestData);
+
+    const manifest = await parser.start(manifestUri, playerInterface);
+
+    expect(manifest.variants.length).toBe(2);
+
+    const variant1 = manifest.variants[0];
+    const variant2 = manifest.variants[1];
+
+    expect(variant1.audio).toBeTruthy();
+    expect(variant2.audio).toBeTruthy();
+
+    const audioUris = manifest.variants.map((v) => {
+      return v.audio[0].uri;
+    });
+    expect(audioUris).toContain('https://example.com/0.m3u8');
+    expect(audioUris).toContain('https://example.com/1.m3u8');
+
+    // Also check that the audio group IDs are distinct and correct
+    expect(variant1.audio[0].groupId).not.toBe(variant2.audio[0].groupId);
+  });
 });
